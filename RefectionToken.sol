@@ -1,9 +1,11 @@
+/**
+ *Submitted for verification at BscScan.com on 2022-10-21
+*/
+
+
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.13;
+pragma solidity ^0.8.13;
 
-// import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-
-// import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 library SafeMath {
     /**
@@ -309,9 +311,6 @@ abstract contract Ownable {
     }
 }
 
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
 interface IERC20 {
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -778,7 +777,6 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     mapping(address => mapping(address => uint256)) private _allowances;
 
     uint256 private _totalSupply;
-
     string private _name;
     string private _symbol;
     uint8 private _decimals;
@@ -1178,7 +1176,8 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     ) internal virtual {}
 }
 
-contract GEMS is ERC20 {
+
+contract TOKEN is ERC20 {
     using SafeMath for uint256;
     address public treasuryAddress; // treasury CA
     bool public isTreasuryContract;
@@ -1254,55 +1253,54 @@ contract GEMS is ERC20 {
     event UpdateMaxWallet(uint256 maxWallet);
     event UpdateMinimumTokensBeforeFeeTaken(uint256 minimumFeeTokensToTake);
     event SetAutomatedMarketMakerPair(address pair, bool value);
-    event ExcludedMaxTransactionAmount(
-        address indexed account,
-        bool isExcluded
-    );
+    event ExcludedMaxTransactionAmount(address indexed account,bool isExcluded);
     event ExcludedFromFee(address account, bool isExcludedFromFee);
-    event UpdateBuyFee(
-        uint256 buyRewardFee,
-        uint256 buyLiquidityFee,
-        uint256 buyMarketingFee
-    );
-    event UpdateSellFee(
-        uint256 sellRewardFee,
-        uint256 sellLiquidityFee,
-        uint256 sellMarketingFee
-    );
-    event UpdateTransferFee(
-        uint256 transferRewardFee,
-        uint256 transferLiquidityFee,
-        uint256 transferMarketingFee
-    );
-    event UpdateTreasuryAddress(
-        address treasuryAddress,
-        bool isTreasuryContract
-    );
+    event UpdateBuyFee(uint256 buyRewardFee, uint256 buyLiquidityFee, uint256 buyMarketingFee);
+    event UpdateSellFee(uint256 sellRewardFee, uint256 sellLiquidityFee, uint256 sellMarketingFee);
+    event UpdateTransferFee(uint256 transferRewardFee, uint256 transferLiquidityFee, uint256 transferMarketingFee);
+    event UpdateTreasuryAddress(address treasuryAddress, bool isTreasuryContract);
     event UpdateMarketingFeeAddress(address marketingFeeAddress);
     event UpdateLiquidityAddress(address _liquidityAddress);
     event SwapAndLiquify(uint256 tokensAutoLiq, uint256 ethAutoLiq);
     event RewardTaken(uint256 rewardFeeTokens);
-    event MarketingFeeTaken(
-        uint256 marketingFeeTokens,
-        uint256 marketingFeeBNBSwapped
-    );
+    event MarketingFeeTaken(uint256 marketingFeeTokens, uint256 marketingFeeBNBSwapped);
     modifier lockTheSwap() {
         inSwapAndLiquify = true;
         _;
         inSwapAndLiquify = false;
     }
 
+    /*
+    _uint_params[0] = _protectBlockCount
+    _uint_params[1] = _gasPriceLimit
+    _uint_params[2] = minimumFeeTokensToTake
+    _uint_params[3] = maxTransactionAmount
+    _uint_params[4] = maxWallet
+    _uint16_params[0] = _protectBlockLiquidityFee
+    _uint16_params[1] = _protectBlockRewardFee
+    _uint16_params[2] = _protectBlockMarketingFee
+    _uint16_params[3] = buyLiquidityFee
+    _uint16_params[4] = buyRewardFee
+    _uint16_params[5] = buyMarketingFee
+    _uint16_params[6] = sellLiquidityFee
+    _uint16_params[7] = sellRewardFee
+    _uint16_params[8] = sellMarketingFee
+    _uint16_params[9] = transferLiquidityFee
+    _uint16_params[10] = transferRewardFee
+    _uint16_params[11] = transferMarketingFee
+    */
     constructor(
         string memory _tokenName,
         string memory _tokenSymbol,
         uint8 _tokenDecimals,
+        uint _initialMint,
         address _pancakeV2RouterAddress,
         address _treasuryAddress,
         address _liquidityAddress,
         address _marketingFeeAddress,
         uint256[5] memory _uint_params,
         uint16[12] memory _uint16_params
-    ) ERC20(_tokenName, _tokenSymbol, _tokenDecimals, 0, msg.sender) {
+    ) ERC20(_tokenName, _tokenSymbol, _tokenDecimals, _initialMint, msg.sender) {
         // _mint(msg.sender, 100000000 * 10**decimals());
         tradingActive = false;
         _transferDelayEnabled = false;
@@ -1311,62 +1309,34 @@ contract GEMS is ERC20 {
         treasuryAddress = _treasuryAddress;
         isTreasuryContract = false;
         _protectBlockCount = _uint_params[0];
-        require(
-            _protectBlockCount <= maxProtectBlockLimit,
-            "Exceeds max protect block limit"
-        );
+        require(_protectBlockCount <= maxProtectBlockLimit,"Exceeds max protect block limit");
         _gasPriceLimit = _uint_params[1] * 1 gwei;
         require(10000000 < _gasPriceLimit, "gasPricelimit > 10000000");
         _protectBlockLiquidityFee = _uint16_params[0];
         _protectBlockRewardFee = _uint16_params[1];
         _protectBlockMarketingFee = _uint16_params[2];
-        require(
-            1000 >
-                _protectBlockLiquidityFee +
-                    _protectBlockRewardFee +
-                    _protectBlockMarketingFee,
-            "protect fee < 100%"
-        );
-
+        require(1000 > _protectBlockLiquidityFee + _protectBlockRewardFee + _protectBlockMarketingFee, "protect fee < 100%");
         buyLiquidityFee = _uint16_params[3];
         buyRewardFee = _uint16_params[4];
         buyMarketingFee = _uint16_params[5];
-        require(
-            maxFeeLimit > buyLiquidityFee + buyRewardFee + buyMarketingFee,
-            "buy fee < 30%"
-        );
-
+        require( maxFeeLimit > buyLiquidityFee + buyRewardFee + buyMarketingFee, "buy fee < 30%");
         sellLiquidityFee = _uint16_params[6];
         sellRewardFee = _uint16_params[7];
         sellMarketingFee = _uint16_params[8];
-        require(
-            maxFeeLimit > sellLiquidityFee + sellRewardFee + sellMarketingFee,
-            "sell fee < 30%"
-        );
-
+        require(maxFeeLimit > sellLiquidityFee + sellRewardFee + sellMarketingFee,"sell fee < 30%");
         minimumFeeTokensToTake = _uint_params[2] * (10**decimals());
         maxTransactionAmount = _uint_params[3] * (10**decimals());
         maxWallet = _uint_params[4] * (10**decimals());
         require(maxWallet > 0, "max wallet > 0");
         require(maxTransactionAmount > 0, "maxTransactionAmount > 0");
         require(minimumFeeTokensToTake > 0, "minimumFeeTokensToTake > 0");
-
         transferLiquidityFee = _uint16_params[9];
         transferRewardFee = _uint16_params[10];
         transferMarketingFee = _uint16_params[11];
-        require(
-            maxFeeLimit >
-                transferLiquidityFee + transferRewardFee + transferMarketingFee,
-            "transfer fee < 30%"
+        require(maxFeeLimit > transferLiquidityFee + transferRewardFee + transferMarketingFee, "transfer fee < 30%"
         );
-
         pancakeRouter = IPancakeRouter02(_pancakeV2RouterAddress);
-
-        pancakePair = IPancakeFactory(pancakeRouter.factory()).createPair(
-            address(this),
-            pancakeRouter.WETH()
-        );
-
+        pancakePair = IPancakeFactory(pancakeRouter.factory()).createPair(address(this), pancakeRouter.WETH());
         isExcludedFromFee[_msgSender()] = true;
         isExcludedFromFee[address(this)] = true;
         isExcludedFromFee[_treasuryAddress] = true;
@@ -1375,13 +1345,7 @@ contract GEMS is ERC20 {
         excludeFromMaxTransaction(address(this), true);
         excludeFromMaxTransaction(_treasuryAddress, true);
         excludeFromMaxTransaction(marketingFeeAddress, true);
-        _setAutomatedMarketMakerPair(pancakePair, true);
-    }
-
-    function decimals() public pure override returns (uint8) {
-        return 9;
-    }
-
+        _setAutomatedMarketMakerPair(pancakePair, true);}
     function enableTrading() external onlyOwner {
         require(!tradingActive, "already enabled");
         tradingActive = true;
@@ -1787,29 +1751,4 @@ contract GEMS is ERC20 {
     }
 
     receive() external payable {}
-}
-
-contract TokenFactory {
-    event TokenCreated(address sender, address token);
-
-    constructor() {}
-
-    address public newToken;
-
-    function creatToken(
-        string calldata tokenName_,
-        string calldata tokenSymbol_,
-        uint8 decimals_,
-        uint256 totalSupply_
-    ) public {
-        ERC20 _token = new ERC20(
-            tokenName_,
-            tokenSymbol_,
-            decimals_,
-            totalSupply_,
-            msg.sender
-        );
-        newToken = address(_token);
-        emit TokenCreated(msg.sender, address(_token));
-    }
 }
