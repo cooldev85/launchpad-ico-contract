@@ -240,7 +240,7 @@ library SafeMath {
     }
 }
 
-abstract contract Ownable {
+contract Ownable {
     address private _owner;
 
     event OwnershipTransferred(
@@ -955,7 +955,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
         returns (bool)
     {
         address owner = _msgSender();
-        _approve(owner, spender, allowance(owner, spender) + addedValue);
+        _approve(owner, spender, _allowances[owner][spender] + addedValue);
         return true;
     }
 
@@ -979,7 +979,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
         returns (bool)
     {
         address owner = _msgSender();
-        uint256 currentAllowance = allowance(owner, spender);
+        uint256 currentAllowance = _allowances[owner][spender];
         require(
             currentAllowance >= subtractedValue,
             "ERC20: decreased allowance below zero"
@@ -992,7 +992,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     }
 
     /**
-     * @dev Moves `amount` of tokens from `from` to `to`.
+     * @dev Moves `amount` of tokens from `sender` to `recipient`.
      *
      * This internal function is equivalent to {transfer}, and can be used to
      * e.g. implement automatic token fees, slashing mechanisms, etc.
@@ -1022,10 +1022,8 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
         );
         unchecked {
             _balances[from] = fromBalance - amount;
-            // Overflow not possible: the sum of all balances is capped by totalSupply, and the sum is preserved by
-            // decrementing then incrementing.
-            _balances[to] += amount;
         }
+        _balances[to] += amount;
 
         emit Transfer(from, to, amount);
 
@@ -1047,10 +1045,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
         _beforeTokenTransfer(address(0), account, amount);
 
         _totalSupply += amount;
-        unchecked {
-            // Overflow not possible: balance + amount is at most totalSupply + amount, which is checked above.
-            _balances[account] += amount;
-        }
+        _balances[account] += amount;
         emit Transfer(address(0), account, amount);
 
         _afterTokenTransfer(address(0), account, amount);
@@ -1076,9 +1071,8 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
         unchecked {
             _balances[account] = accountBalance - amount;
-            // Overflow not possible: amount <= accountBalance <= totalSupply.
-            _totalSupply -= amount;
         }
+        _totalSupply -= amount;
 
         emit Transfer(account, address(0), amount);
 
@@ -1111,7 +1105,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     }
 
     /**
-     * @dev Updates `owner` s allowance for `spender` based on spent `amount`.
+     * @dev Spend `amount` form the allowance of `owner` toward `spender`.
      *
      * Does not update the allowance amount in case of infinite allowance.
      * Revert if not enough allowance is available.
@@ -1176,8 +1170,7 @@ contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     ) internal virtual {}
 }
 
-
-contract TOKEN is ERC20 {
+contract ReflectionToken is ERC20 {
     using SafeMath for uint256;
     address public treasuryAddress; // treasury CA
     bool public isTreasuryContract;
@@ -1294,13 +1287,14 @@ contract TOKEN is ERC20 {
         string memory _tokenSymbol,
         uint8 _tokenDecimals,
         uint _initialMint,
+        address owner_,
         address _pancakeV2RouterAddress,
         address _treasuryAddress,
         address _liquidityAddress,
         address _marketingFeeAddress,
         uint256[5] memory _uint_params,
         uint16[12] memory _uint16_params
-    ) ERC20(_tokenName, _tokenSymbol, _tokenDecimals, _initialMint, msg.sender) {
+    ) ERC20(_tokenName, _tokenSymbol, _tokenDecimals, _initialMint, owner_) {
         // _mint(msg.sender, 100000000 * 10**decimals());
         tradingActive = false;
         _transferDelayEnabled = false;
@@ -1751,4 +1745,38 @@ contract TOKEN is ERC20 {
     }
 
     receive() external payable {}
+}
+contract TokenFactory {
+    event TokenCreated(address sender, address token);
+    constructor() {}
+    address public newToken;
+    function createReflectionToken(
+        string memory _tokenName,
+        string memory _tokenSymbol,
+        uint8 _tokenDecimals,
+        uint _initialMint,
+        address _pancakeV2RouterAddress,
+        address _treasuryAddress,
+        address _liquidityAddress,
+        address _marketingFeeAddress,
+        uint256[5] memory _uint_params,
+        uint16[12] memory _uint16_params
+        
+    ) public {
+        ReflectionToken _token = new ReflectionToken(
+            _tokenName,
+            _tokenSymbol,
+            _tokenDecimals,
+            _initialMint,
+            msg.sender,
+            _pancakeV2RouterAddress,
+            _treasuryAddress,
+            _liquidityAddress,
+            _marketingFeeAddress,
+            _uint_params,
+            _uint16_params
+        );
+        newToken = address(_token);
+        emit TokenCreated(msg.sender, address(_token));
+    }
 }

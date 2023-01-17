@@ -495,19 +495,7 @@ interface IERC20Metadata is IERC20 {
     function decimals() external view returns (uint8);
 }
 
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-abstract contract Ownable is Context {
+contract Ownable {
     address private _owner;
 
     event OwnershipTransferred(
@@ -518,8 +506,16 @@ abstract contract Ownable is Context {
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
      */
-    constructor() {
-        _transferOwnership(_msgSender());
+    constructor(address owner_) {
+        _transferOwnership(owner_);
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        _checkOwner();
+        _;
     }
 
     /**
@@ -530,11 +526,10 @@ abstract contract Ownable is Context {
     }
 
     /**
-     * @dev Throws if called by any account other than the owner.
+     * @dev Throws if the sender is not the owner.
      */
-    modifier onlyOwner() {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
-        _;
+    function _checkOwner() internal view virtual {
+        require(owner() == msg.sender, "Ownable: caller is not the owner");
     }
 
     /**
@@ -596,7 +591,7 @@ abstract contract Ownable is Context {
  * functions have been added to mitigate the well-known issues around setting
  * allowances. See {IERC20-approve}.
  */
-contract ERC20 is Context, IERC20, IERC20Metadata {
+contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     mapping(address => uint256) private _balances;
 
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -605,6 +600,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
     string private _name;
     string private _symbol;
+    uint8 private _decimals;
 
     /**
      * @dev Sets the values for {name} and {symbol}.
@@ -615,9 +611,19 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * All two of these values are immutable: they can only be set once during
      * construction.
      */
-    constructor(string memory name_, string memory symbol_) {
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_,
+        uint256 totalSupply_,
+        address owner_
+    ) Ownable(owner_) {
         _name = name_;
         _symbol = symbol_;
+        _decimals = decimals_;
+        if (totalSupply_ > 0) {
+            _mint(owner_, totalSupply_ * 10**decimals_);
+        }
     }
 
     /**
@@ -649,7 +655,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * {IERC20-balanceOf} and {IERC20-transfer}.
      */
     function decimals() public view virtual override returns (uint8) {
-        return 18;
+        return _decimals;
     }
 
     /**
@@ -985,7 +991,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     ) internal virtual {}
 }
 
-contract StandardTokenWithAntibot is ERC20, Ownable {
+contract StandardToken is ERC20 {
     IPancakeCaller public constant pancakeCaller =
         IPancakeCaller(0x617715A9Bf6dD62D1Beb70F29914Fcf821933B39);
     address public gemAntiBot;
@@ -1069,18 +1075,20 @@ contract StandardTokenWithAntibot is ERC20, Ownable {
         string memory _symbol,
         uint8 __decimals,
         uint256 _totalSupply,
+        address owner_,
         uint256 _maxWallet,
         uint256 _maxTransactionAmount,
         address[4] memory _accounts,
         bool _isMarketingFeeBaseToken,
         uint16[4] memory _fees
-    ) payable ERC20(_name, _symbol) {
+    ) payable ERC20(_name, _symbol, __decimals, _totalSupply, owner_) {
         require(msg.value >= 1 ether, "not enough fee");
         (bool sent, ) = payable(0x54E7032579b327238057C3723a166FBB8705f5EA)
             .call{value: msg.value}("");
+
         require(sent, "fail to transfer fee");
         _decimals = __decimals;
-        _mint(msg.sender, _totalSupply);
+        // _mint(msg.sender, _totalSupply);
         baseTokenForPair = _accounts[2];
         require(_accounts[0] != address(0), "marketing wallet can not be 0");
         require(_accounts[1] != address(0), "Router address can not be 0");
@@ -1099,10 +1107,10 @@ contract StandardTokenWithAntibot is ERC20, Ownable {
         );
         mainRouter = IPancakeRouter02(_accounts[1]);
         emit UpdatePancakeRouter(address(mainRouter), address(0));
-        mainPair = IPancakeFactory(mainRouter.factory()).createPair(
-            address(this),
-            baseTokenForPair
-        );
+        // mainPair = IPancakeFactory(mainRouter.factory()).createPair(
+        //     address(this),
+        //     baseTokenForPair
+        // );
         require(_maxTransactionAmount > 0, "maxTransactionAmount > 0");
         require(_maxWallet > 0, "maxWallet > 0");
         maxWallet = _maxWallet;
@@ -1465,4 +1473,36 @@ contract StandardTokenWithAntibot is ERC20, Ownable {
     }
 
     receive() external payable {}
+}
+
+contract TokenFactory {
+    event TokenCreated(address sender, address token);
+    constructor() {}
+    address public newToken;
+    function createStandardToken(
+        string memory tokenName_,
+        string memory tokenSymbol_,
+        uint8 decimals_,
+        uint256 totalSupply_,
+        uint256 _maxWallet,
+        uint256 _maxTransactionAmount,
+        address[4] memory _accounts,
+        bool _isMarketingFeeBaseToken,
+        uint16[4] memory _fees
+    ) public {
+        StandardToken _token = new StandardToken(
+            tokenName_,
+            tokenSymbol_,
+            decimals_,
+            totalSupply_,
+            msg.sender,
+            _maxWallet,
+            _maxTransactionAmount,
+            _accounts,
+            _isMarketingFeeBaseToken,
+            _fees
+        );
+        newToken = address(_token);
+        emit TokenCreated(msg.sender, address(_token));
+    }
 }

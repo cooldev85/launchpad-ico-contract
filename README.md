@@ -1,1 +1,1 @@
-# launchpad-ico-contact
+# lanchpad contracts
