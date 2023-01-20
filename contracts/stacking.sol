@@ -1,16 +1,14 @@
-// SPDX-License-Identifier: Unlicensed
 
-pragma solidity >=0.7.0;
+// SPDX-License-Identifier: GPL-3.0-only
 
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
+pragma solidity ^0.8.11;
 
-    function _msgData() internal view virtual returns (bytes calldata) {
-        return msg.data;
-    }
-}
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
+
+
 
 interface IERC20 {
     /**
@@ -109,31 +107,6 @@ interface IERC20Metadata is IERC20 {
     function decimals() external view returns (uint8);
 }
 
-/**
- * @dev Implementation of the {IERC20} interface.
- *
- * This implementation is agnostic to the way tokens are created. This means
- * that a supply mechanism has to be added in a derived contract using {_mint}.
- * For a generic mechanism see {ERC20PresetMinterPauser}.
- *
- * TIP: For a detailed writeup see our guide
- * https://forum.zeppelin.solutions/t/how-to-implement-erc20-supply-mechanisms/226[How
- * to implement supply mechanisms].
- *
- * We have followed general OpenZeppelin Contracts guidelines: functions revert
- * instead returning `false` on failure. This behavior is nonetheless
- * conventional and does not conflict with the expectations of ERC20
- * applications.
- *
- * Additionally, an {Approval} event is emitted on calls to {transferFrom}.
- * This allows applications to reconstruct the allowance for all accounts just
- * by listening to said events. Other implementations of the EIP may not emit
- * these events, as it isn't required by the specification.
- *
- * Finally, the non-standard {decreaseAllowance} and {increaseAllowance}
- * functions have been added to mitigate the well-known issues around setting
- * allowances. See {IERC20-approve}.
- */
 contract ERC20 is Context, IERC20, IERC20Metadata {
     mapping(address => uint256) private _balances;
 
@@ -315,7 +288,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
      * @dev Moves `amount` of tokens from `from` to `to`.
      *
      * This internal function is equivalent to {transfer}, and can be used to
-     * e.g. implement automatic token fees, slashing mechanisms, etc.
+     * e.g. implement automatic ERC20 fees, slashing mechanisms, etc.
      *
      * Emits a {Transfer} event.
      *
@@ -484,357 +457,91 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     ) internal virtual {}
 }
 
-// CAUTION
-// This version of SafeMath should only be used with Solidity 0.8 or later,
-// because it relies on the compiler's built in overflow checks.
-/**
- * @dev Wrappers over Solidity's arithmetic operations.
- *
- * NOTE: `SafeMath` is generally not needed starting with Solidity 0.8, since the compiler
- * now has built in overflow checking.
- */
-library SafeMath {
-    /**
-     * @dev Returns the addition of two unsigned integers, with an overflow flag.
-     *
-     * _Available since v3.4._
-     */
-    function tryAdd(uint256 a, uint256 b) internal pure returns (bool, uint256) {
-        unchecked {
-            uint256 c = a + b;
-            if (c < a) return (false, 0);
-            return (true, c);
-        }
+contract StakeAPL is Pausable, Ownable, ReentrancyGuard {
+
+    ERC20 THKOFOLELE;
+
+    // 30 Days (30 * 24 * 60 * 60)
+    uint256 public planDuration = 2592000;
+
+    // 180 Days (180 * 24 * 60 * 60)
+    uint256 _planExpired = 15552000;
+
+    uint8 public interestRate = 32;
+    uint256 public planExpired;
+    uint8 public totalStakers;
+
+    struct StakeInfo {        
+        uint256 startTS;
+        uint256 endTS;        
+        uint256 amount; 
+        uint256 claimed;       
+    }
+    
+    event Staked(address indexed from, uint256 amount);
+    event Claimed(address indexed from, uint256 amount);
+    
+    mapping(address => StakeInfo) public stakeInfos;
+    mapping(address => bool) public addressStaked;
+
+
+    constructor(ERC20 _tokenAddress) {
+        require(address(_tokenAddress) != address(0),"ERC20 Address cannot be address 0");                
+        THKOFOLELE = _tokenAddress;        
+        planExpired = block.timestamp + _planExpired;
+        totalStakers = 0;
+    }    
+
+    function transferToken(address to,uint256 amount) external onlyOwner{
+        require(THKOFOLELE.transfer(to, amount), "ERC20 transfer failed!");  
     }
 
-    /**
-     * @dev Returns the subtraction of two unsigned integers, with an overflow flag.
-     *
-     * _Available since v3.4._
-     */
-    function trySub(uint256 a, uint256 b) internal pure returns (bool, uint256) {
-        unchecked {
-            if (b > a) return (false, 0);
-            return (true, a - b);
-        }
-    }
+    function claimReward() external returns (bool){
+        require(addressStaked[_msgSender()] == true, "You are not participated");
+        require(stakeInfos[_msgSender()].endTS < block.timestamp, "Stake Time is not over yet");
+        require(stakeInfos[_msgSender()].claimed == 0, "Already claimed");
 
-    /**
-     * @dev Returns the multiplication of two unsigned integers, with an overflow flag.
-     *
-     * _Available since v3.4._
-     */
-    function tryMul(uint256 a, uint256 b) internal pure returns (bool, uint256) {
-        unchecked {
-            // Gas optimization: this is cheaper than requiring 'a' not being zero, but the
-            // benefit is lost if 'b' is also tested.
-            // See: https://github.com/OpenZeppelin/openzeppelin-contracts/pull/522
-            if (a == 0) return (true, 0);
-            uint256 c = a * b;
-            if (c / a != b) return (false, 0);
-            return (true, c);
-        }
-    }
+        uint256 stakeAmount = stakeInfos[_msgSender()].amount;
+        uint256 totalTokens = stakeAmount + (stakeAmount * interestRate / 100);
+        stakeInfos[_msgSender()].claimed == totalTokens;
+        THKOFOLELE.transfer(_msgSender(), totalTokens);
 
-    /**
-     * @dev Returns the division of two unsigned integers, with a division by zero flag.
-     *
-     * _Available since v3.4._
-     */
-    function tryDiv(uint256 a, uint256 b) internal pure returns (bool, uint256) {
-        unchecked {
-            if (b == 0) return (false, 0);
-            return (true, a / b);
-        }
-    }
-
-    /**
-     * @dev Returns the remainder of dividing two unsigned integers, with a division by zero flag.
-     *
-     * _Available since v3.4._
-     */
-    function tryMod(uint256 a, uint256 b) internal pure returns (bool, uint256) {
-        unchecked {
-            if (b == 0) return (false, 0);
-            return (true, a % b);
-        }
-    }
-
-    /**
-     * @dev Returns the addition of two unsigned integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `+` operator.
-     *
-     * Requirements:
-     *
-     * - Addition cannot overflow.
-     */
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a + b;
-    }
-
-    /**
-     * @dev Returns the subtraction of two unsigned integers, reverting on
-     * overflow (when the result is negative).
-     *
-     * Counterpart to Solidity's `-` operator.
-     *
-     * Requirements:
-     *
-     * - Subtraction cannot overflow.
-     */
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a - b;
-    }
-
-    /**
-     * @dev Returns the multiplication of two unsigned integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `*` operator.
-     *
-     * Requirements:
-     *
-     * - Multiplication cannot overflow.
-     */
-    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a * b;
-    }
-
-    /**
-     * @dev Returns the integer division of two unsigned integers, reverting on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator.
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a / b;
-    }
-
-    /**
-     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
-     * reverting when dividing by zero.
-     *
-     * Counterpart to Solidity's `%` operator. This function uses a `revert`
-     * opcode (which leaves remaining gas untouched) while Solidity uses an
-     * invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a % b;
-    }
-
-    /**
-     * @dev Returns the subtraction of two unsigned integers, reverting with custom message on
-     * overflow (when the result is negative).
-     *
-     * CAUTION: This function is deprecated because it requires allocating memory for the error
-     * message unnecessarily. For custom revert reasons use {trySub}.
-     *
-     * Counterpart to Solidity's `-` operator.
-     *
-     * Requirements:
-     *
-     * - Subtraction cannot overflow.
-     */
-    function sub(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        unchecked {
-            require(b <= a, errorMessage);
-            return a - b;
-        }
-    }
-
-    /**
-     * @dev Returns the integer division of two unsigned integers, reverting with custom message on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator. Note: this function uses a
-     * `revert` opcode (which leaves remaining gas untouched) while Solidity
-     * uses an invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        unchecked {
-            require(b > 0, errorMessage);
-            return a / b;
-        }
-    }
-
-    /**
-     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
-     * reverting with custom message when dividing by zero.
-     *
-     * CAUTION: This function is deprecated because it requires allocating memory for the error
-     * message unnecessarily. For custom revert reasons use {tryMod}.
-     *
-     * Counterpart to Solidity's `%` operator. This function uses a `revert`
-     * opcode (which leaves remaining gas untouched) while Solidity uses an
-     * invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function mod(
-        uint256 a,
-        uint256 b,
-        string memory errorMessage
-    ) internal pure returns (uint256) {
-        unchecked {
-            require(b > 0, errorMessage);
-            return a % b;
-        }
-    }
-}
-/**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
- *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- */
-abstract contract Ownable is Context {
-    address private _owner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-    /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
-     */
-    constructor() {
-        _transferOwnership(_msgSender());
-    }
-
-    /**
-     * @dev Returns the address of the current owner.
-     */
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
-
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyOwner() {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
-        _;
-    }
-
-    /**
-     * @dev Leaves the contract without owner. It will not be possible to call
-     * `onlyOwner` functions anymore. Can only be called by the current owner.
-     *
-     * NOTE: Renouncing ownership will leave the contract without an owner,
-     * thereby removing any functionality that is only available to the owner.
-     */
-    function renounceOwnership() public virtual onlyOwner {
-        _transferOwnership(address(0));
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
-     */
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        _transferOwnership(newOwner);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Internal function without access restriction.
-     */
-    function _transferOwnership(address newOwner) internal virtual {
-        address oldOwner = _owner;
-        _owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
-    }
-}
-
-abstract contract Token is ERC20 {}
-
-contract Airdrop is Ownable {
-    using SafeMath for uint;
-
-
-    event EtherTransfer(address beneficiary, uint amount);
-
-    address public _tokenContract;
-    uint256 public _airdropAmount;
-    // fee 1000000000000000 = 0.001 BNB and set it 0 if no fees
-    uint256 public _fee = 1000000000000000;
-
-    constructor(address tokenContract, uint256 airdropAmount) public {
-
-      _tokenContract = tokenContract;
-      _airdropAmount = airdropAmount;
-    }
-
-
-
-    function dropTokens() public payable returns (bool) {
-
-        require(msg.value >= _fee, "Not enough cash");
-
-        require(Token(_tokenContract).balanceOf(msg.sender) < _airdropAmount);
-
-        require(Token(_tokenContract).transfer(msg.sender, _airdropAmount));
+        emit Claimed(_msgSender(), totalTokens);
 
         return true;
     }
 
-    function setTokenContract(address tokenContract) external onlyOwner {
-        _tokenContract = tokenContract;
+    function getTokenExpiry() external view returns (uint256) {
+        require(addressStaked[_msgSender()] == true, "You are not participated");
+        return stakeInfos[_msgSender()].endTS;
     }
 
-    function setAirdropAmount(uint256 airdropAmount) external onlyOwner {
-        _airdropAmount = airdropAmount;
+    function stakeToken(uint256 stakeAmount) external payable whenNotPaused {
+        require(stakeAmount >0, "Stake amount should be correct");
+        require(block.timestamp < planExpired , "Plan Expired");
+        require(addressStaked[_msgSender()] == false, "You already participated");
+        require(THKOFOLELE.balanceOf(_msgSender()) >= stakeAmount, "Insufficient Balance");
+        
+           THKOFOLELE.transferFrom(_msgSender(), address(this), stakeAmount);
+            totalStakers++;
+            addressStaked[_msgSender()] = true;
+
+            stakeInfos[_msgSender()] = StakeInfo({                
+                startTS: block.timestamp,
+                endTS: block.timestamp + planDuration,
+                amount: stakeAmount,
+                claimed: 0
+            });
+        
+        emit Staked(_msgSender(), stakeAmount);
+    }    
+
+
+    function pause() external onlyOwner {
+        _pause();
     }
 
-    function setFee(uint256 fee) external onlyOwner {
-        _fee = fee;
+    function unpause() external onlyOwner {
+        _unpause();
     }
-
-    function tokenBalance(address _tokenAddr) public view returns (uint256) {
-
-        return Token(_tokenAddr).balanceOf(address(this));
-    }
-
-
-
-    function withdrawTokens(address beneficiary, address _tokenAddr) public onlyOwner {
-        require(Token(_tokenAddr).transfer(beneficiary, Token(_tokenAddr).balanceOf(address(this))));
-    }
-
-
-
-    function withdrawEther(address payable beneficiary) public onlyOwner {
-        beneficiary.transfer(address(this).balance);
-    }
-
-
 }

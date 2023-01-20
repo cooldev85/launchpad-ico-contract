@@ -8,6 +8,9 @@
 
 pragma solidity ^0.8.13;
 
+
+
+
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -103,15 +106,6 @@ interface IERC20Metadata is IERC20 {
     function decimals() external view returns (uint8);
 }
 
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
-
-    function _msgData() internal view virtual returns (bytes calldata) {
-        return msg.data;
-    }
-}
 contract Ownable {
     address private _owner;
 
@@ -182,6 +176,17 @@ contract Ownable {
         emit OwnershipTransferred(oldOwner, newOwner);
     }
 }
+
+contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
 
 contract ERC20 is Context, Ownable, IERC20, IERC20Metadata {
     mapping(address => uint256) private _balances;
